@@ -80,7 +80,7 @@ visionmate/
 ### 1. Clone Repository & Environment Configuration
 
 ```bash
-git clone https://github.com/yourusername/visionmate.git
+git clone https://github.com/Aditya12D/visionmate.git
 cd visionmate
 
 # Create Python 3.10 virtual environment
