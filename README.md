@@ -79,16 +79,18 @@ visionmate/
 
 ### 1. Clone Repository & Environment Configuration
 
+VisionMate requires **Python 3.10** to guarantee PaddlePaddle and NumPy stability
+
 ```bash
 git clone https://github.com/Aditya12D/visionmate.git
 cd visionmate
 
 # Create Python 3.10 virtual environment
-python -m venv venv310
-
-# Windows activation
+py -3.10 -m venv venv310
 venv310\Scripts\activate
-# Linux/Ubuntu activation
+
+# (Linux / Mac)
+python3.10 -m venv venv310
 source venv310/bin/activate
 
 # Install dependency tree
