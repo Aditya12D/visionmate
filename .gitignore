@@ -1,0 +1,34 @@
+# --- Python Environment ---
+.venv/
+venv/
+env/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+venv310/
+
+# --- VisionMate Models & Binaries (CRITICAL) ---
+# Prevents giant downloaded model weights from bloating git
+models/
+*.onnx
+*.pdparams
+*.pdmodel
+*.pdopt
+
+# --- Data, Cached assets & Temporary Streams ---
+images/live.jpg
+static/output.wav
+*.mp3
+*.wav
+*.jpg
+*.jpeg
+*.png
+
+# --- IDEs & System Files ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

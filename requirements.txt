@@ -1,0 +1,19 @@
+# Core Framework & Networking
+flask==3.0.3
+flask-cors==4.0.1
+
+# Computer Vision & OCR
+opencv-python==4.9.0.80
+paddlepaddle==2.6.1
+paddleocr==2.9.1
+numpy==1.26.4
+
+# LLM Orchestration
+ollama==0.2.1
+
+# Text-to-Speech & Audio Output
+sounddevice==0.4.6
+soundfile==0.9.0.post1
+
+# Utilities (For planned duplicate detection)
+rapidfuzz==3.9.3
