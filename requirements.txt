@@ -1,19 +1,30 @@
+# ============================
+# VisionMate Requirements
+# Python 3.10
+# ============================
+
 # Core Framework & Networking
 flask==3.0.3
 flask-cors==4.0.1
 
-# Computer Vision & OCR
-opencv-python==4.9.0.80
-paddlepaddle==2.6.1
+# OCR
 paddleocr==2.9.1
+paddlepaddle==3.1.1
+
+# Computer Vision
+opencv-python==4.11.0.86
 numpy==1.26.4
+Pillow==12.3.0
 
-# LLM Orchestration
-ollama==0.2.1
+# LLM
+ollama>=0.5.0
 
-# Text-to-Speech & Audio Output
-sounddevice==0.4.6
-soundfile==0.9.0.post1
+# TTS
+piper-tts==1.4.2
+sounddevice==0.5.2
+soundfile==0.13.1
 
-# Utilities (For planned duplicate detection)
-rapidfuzz==3.9.3
+# Utilities
+huggingface-hub>=0.34.0
+requests>=2.32.0
+tqdm>=4.67.0
