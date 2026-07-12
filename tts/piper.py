@@ -17,9 +17,9 @@ class PiperTTS:
 
     def speak(self, text: str):
         """
-        Convert text to speech and play it.
+        Convert text to speech and play it locally on the laptop.
         """
-        config=SynthesisConfig(length_scale=1.2)
+        config = SynthesisConfig(length_scale=1.2)
         output_path = "output.wav"
 
         with wave.open(output_path, "wb") as wav_file:
@@ -29,3 +29,14 @@ class PiperTTS:
 
         sd.play(audio, sample_rate)
         sd.wait()
+
+    def save_to_file(self, text: str, output_path: str):
+        """
+        Synthesizes text to speech and saves it directly to the designated network path 
+        without playing it out loud on the laptop speakers.
+        """
+        config = SynthesisConfig(length_scale=1.2)
+
+        # Uses the identical, verified working method from your speak function
+        with wave.open(output_path, "wb") as wav_file:
+            self.voice.synthesize_wav(text, wav_file, syn_config=config)
