@@ -1,171 +1,257 @@
+import cv2
 import os
 import base64
 import numpy as np
-import cv2
-from flask import Flask, request, jsonify, send_file, render_template_string
+
+from modes.walking import WalkingMode
+from flask import Flask,request, jsonify,send_file,render_template_string
 from flask_cors import CORS
-
 from ocr.paddle import OCR
-from modes.reading import process
 from tts.piper import PiperTTS
+from modes.reading import process
+app=Flask(__name__)
+CORS(app)
 
-app = Flask(__name__)
-CORS(app)  # Allows cross-origin requests from mobile devices
+print("Warming up Visionmate ai core modules")
+ocr=OCR()
+walking_engine=WalkingMode()
+tts=PiperTTS()
 
-# Initialize core intelligence engines on laptop memory
-print("Warming up VisionMate AI Core on Laptop...")
-ocr = OCR()
-tts = PiperTTS()
+AUDIO_OUTPUT_PATH="static/output.wav"
+os.makedirs("static",exist_ok=True)
 
-# Temporary audio path to store the spoken phrase
-AUDIO_OUTPUT_PATH = "static/output.wav"
-os.makedirs("static", exist_ok=True)
+
+@app.route('/')
+def index():
+    return render_template_string(HTML_INTERFACE)
+
+
+@app.route('/api/reading-mode',methods=['POST'])
+def handle_reading_mode():
+    try:
+        data=request.json['image']
+        _, encoded=data.split(",",1)
+        img_bytes=base64.b64decode(encoded)
+        nparr=np.frombuffer(img_bytes,np.uint8)
+        frame=cv2.imdecode(nparr,cv2.IMREAD_COLOR)
+
+        raw_text=ocr.read(frame)
+        if not raw_text.strip():
+            return jsonify({
+                "text":"No text detected.",
+                "audio_available":False
+            })
+        
+        cleaned_text=process(raw_text)
+
+        tts.save_to_file(cleaned_text,AUDIO_OUTPUT_PATH)
+        return jsonify({
+            "text":cleaned_text,
+            "audio_available":True
+        })
+
+    except Exception as e:
+        return jsonify ({
+            "error":str(e)
+        }),500
+
+
+@app.route('/api/walking-mode',methods=["POST"])
+def handle_walking_mode():
+    try:
+        data = request.json['image']
+        _, encoded = data.split(",", 1)
+        img_bytes = base64.b64decode(encoded)
+        
+        nparr = np.frombuffer(img_bytes, np.uint8)
+        frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+        spatial_matrix=walking_engine.process(frame)
+        alert_phrase=walking_engine.generate_alert_text(spatial_matrix)
+
+        if alert_phrase=="NEEDS_SCENERY_DESCRIPTION":
+            alert_phrase="Caution. Open space ahead"
+        
+        tts.save_to_file(alert_phrase,AUDIO_OUTPUT_PATH)
+        return jsonify({
+            "text":alert_phrase,
+            "audio_available":True
+        })
+
+    except Exception as e:
+        return jsonify({
+            "error":str(e)
+        }),500
+    
+
+@app.route("/get_audio")
+def get_audio():
+    return send_file(
+        AUDIO_OUTPUT_PATH,
+        mimetype="audio/wav"
+    )
+
 
 HTML_INTERFACE = """
 <!DOCTYPE html>
 <html>
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VisionMate Client</title>
+    <title>VisionMate AI Dashboard</title>
     <style>
-        body { font-family: sans-serif; text-align: center; background: #121212; color: white; margin: 0; padding: 20px; }
-        #video { width: 100%; max-width: 400px; border-radius: 10px; background: #222; transform: scaleX(1); }
-        button { width: 85%; padding: 18px; font-size: 1.2rem; background: #28a745; color: white; border: none; border-radius: 8px; margin: 15px 0; font-weight: bold; }
-        button:active { background: #218838; }
-        #stopBtn { background: #dc3545; }
-        #stopBtn:active { background: #c82333; }
-        #status { font-size: 1.1rem; color: #007bff; font-weight: bold; margin: 10px 0; }
-        #output-text { padding: 10px; background: #222; margin-top: 10px; border-radius: 5px; font-size: 0.9rem; text-align: left; max-height: 100px; overflow-y: auto;}
+        body { font-family: system-ui, sans-serif; text-align: center; background: #0f0f12; color: #e4e4e7; margin: 0; padding: 20px; }
+        .container { max-width: 450px; margin: 0 auto; }
+        #video { width: 100%; border-radius: 12px; background: #18181b; border: 2px solid #27272a; }
+        .mode-container { display: flex; gap: 10px; margin: 15px 0; }
+        .mode-btn { flex: 1; padding: 12px; font-weight: bold; background: #27272a; color: #a1a1aa; border: 2px solid transparent; border-radius: 8px; cursor: pointer; }
+        .mode-btn.active { background: #1e1b4b; color: #818cf8; border-color: #4f46e5; }
+        
+        .btn-base { width: 100%; padding: 18px; font-size: 1.2rem; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: background 0.2s; }
+        #actionBtn { background: #2563eb; }
+        #actionBtn.streaming { background: #ea580c; }
+        #stopBtn { padding: 12px; margin-top: 10px; background: #dc2626; }
+        
+        #status { font-size: 1rem; color: #3b82f6; font-weight: bold; margin: 15px 0; min-height: 24px; }
+        .log-box { padding: 15px; background: #18181b; border-radius: 8px; text-align: left; border: 1px solid #27272a; min-height: 50px; font-family: monospace; }
     </style>
 </head>
 <body>
-    <h1>VisionMate Mobile</h1>
-    
-    <video id="video" autoplay playsinline muted></video>
-    
-    <br>
-    <button id="scanBtn" onclick="captureAndProcess()">⚡ SCAN & READ</button>
-    <button id="stopBtn" onclick="stopAudio()">🛑 STOP AUDIO</button>
-    
-    <div id="status">Ready</div>
-    <h3>Processed Text:</h3>
-    <div id="output-text" id="textLog">No text scanned yet.</div>
+    <div class="container">
+        <h2>VisionMate Framework</h2>
+        <video id="video" autoplay playsinline muted></video>
+        
+        <div class="mode-container">
+            <button id="btn-reading" class="mode-btn active" onclick="setMode('reading')">📖 READING MODE</button>
+            <button id="btn-walking" class="mode-btn" onclick="setMode('walking')">🚶 WALKING MODE</button>
+        </div>
+
+        <button id="actionBtn" class="btn-base" onclick="toggleStreamState()">⚡ START LIVE PIPELINE</button>
+        <button id="stopBtn" class="btn-base" onclick="emergencyStopAll()">🛑 EMERGENCY STOP</button>
+        
+        <div id="status">Ready</div>
+        <div class="log-box" id="logBox">System initialized. Awaiting trigger.</div>
+    </div>
 
     <audio id="audioPlayer" style="display:none;"></audio>
-
     <canvas id="canvas" style="display:none;"></canvas>
 
     <script>
         const video = document.getElementById('video');
         const canvas = document.getElementById('canvas');
         const statusDiv = document.getElementById('status');
-        const textLog = document.getElementById('output-text');
+        const logBox = document.getElementById('logBox');
         const audioPlayer = document.getElementById('audioPlayer');
+        const actionBtn = document.getElementById('actionBtn');
+        
+        let currentMode = 'reading';
+        let isLiveActive = false; // Main switch state
+        let nextFrameTimeoutId = null; 
 
-        // Request Access to Back Facing Camera of Phone
-        navigator.mediaDevices.getUserMedia({ 
-            video: { facingMode: "environment" }, 
-            audio: false 
-        })
-        .then(stream => { video.srcObject = stream; })
-        .catch(err => { 
-            statusDiv.innerText = "Camera Access Denied";
-            console.error(err);
-        });
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false })
+            .then(stream => { video.srcObject = stream; })
+            .catch(err => { statusDiv.innerText = "Camera Missing/Denied"; });
 
-        function captureAndProcess() {
-            statusDiv.innerText = "Capturing frame...";
+        function setMode(mode) {
+            currentMode = mode;
+            document.getElementById('btn-reading').classList.toggle('active', mode === 'reading');
+            document.getElementById('btn-walking').classList.toggle('active', mode === 'walking');
+            logBox.innerText = `Switched to ${mode.toUpperCase()} mode.`;
+            if (isLiveActive) stopReactivePipeline();
+        }
+
+        function toggleStreamState() {
+            if (isLiveActive) {
+                stopReactivePipeline();
+            } else {
+                isLiveActive = true;
+                actionBtn.innerText = "⏸️ PAUSE LIVE STREAM";
+                actionBtn.classList.add('streaming');
+                // Kick off the very first reactive execution chain link
+                executeReactiveCycle();
+            }
+        }
+
+        function stopReactivePipeline() {
+            isLiveActive = false;
+            if (nextFrameTimeoutId) clearTimeout(nextFrameTimeoutId);
+            actionBtn.innerText = "⚡ START LIVE PIPELINE";
+            actionBtn.classList.remove('streaming');
+            statusDiv.innerText = "Stream paused.";
+        }
+
+        function executeReactiveCycle() {
+            // Check if the user paused the system mid-execution
+            if (!isLiveActive) return; 
+
+            statusDiv.innerText = "Capturing framework matrix...";
             
-            // Draw current video frame to hidden canvas to extract image
             const context = canvas.getContext('2d');
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
             context.drawImage(video, 0, 0, canvas.width, canvas.height);
             
-            // Convert frame to Base64 JPEG string
-            const dataUrl = canvas.toDataURL('image/jpeg');
-            
-            statusDiv.innerText = "Laptop processing AI pipeline...";
-            
-            fetch('/process_mobile', {
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.6); 
+            const targetEndpoint = currentMode === 'reading' ? '/api/reading-mode' : '/api/walking-mode';
+
+            fetch(targetEndpoint, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ image: dataUrl })
             })
             .then(res => res.json())
             .then(data => {
+                if (!isLiveActive) return; // Guard clause if turned off mid-request
+                
                 if(data.error) {
-                    statusDiv.innerText = "Error: " + data.error;
+                    logBox.innerText = "Pipeline exception: " + data.error;
+                    // Try recovering by attempting a retry after 3 seconds
+                    nextFrameTimeoutId = setTimeout(executeReactiveCycle, 3000);
                     return;
                 }
                 
-                textLog.innerText = data.text;
-                statusDiv.innerText = "Streaming Audio Output...";
+                logBox.innerText = data.text;
+                statusDiv.innerText = "Speaking alert...";
                 
-                // Force mobile browser to fetch and play synthesized file with timestamp cache-buster
+                // Point to the newly rendered Piper file
                 audioPlayer.src = "/get_audio?v=" + new Date().getTime();
-                audioPlayer.play();
-                audioPlayer.onended = () => { statusDiv.innerText = "Ready"; };
+                audioPlayer.play().catch(e => {
+                    console.log("Audio play blocked by browser window security policies.");
+                    // Safe fallback: If audio player fails, force the loop forward anyway
+                    scheduleNextFrame(1500);
+                });
             })
             .catch(err => {
-                statusDiv.innerText = "Server Error.";
-                console.error(err);
+                if (!isLiveActive) return;
+                statusDiv.innerText = "Connection dropped. Retrying...";
+                nextFrameTimeoutId = setTimeout(executeReactiveCycle, 3000);
             });
         }
 
-        function stopAudio() {
+        // --- THE DYNAMIC EVENT EVENT TRIGGER ---
+        // Tells the hardware: The absolute second you finish speaking, wait a beat, then run again!
+        audioPlayer.onended = () => {
+            if (!isLiveActive) return;
+            // Introduce a short, natural breathing window of silence before taking the next photo
+            // 1500ms (1.5 seconds) gives the user a beat to register the audio environment
+            scheduleNextFrame(1500);
+        };
+
+        function scheduleNextFrame(delayMs) {
+            statusDiv.innerText = "Awaiting natural pause window...";
+            nextFrameTimeoutId = setTimeout(executeReactiveCycle, delayMs);
+        }
+
+        function emergencyStopAll() {
+            stopReactivePipeline();
             audioPlayer.pause();
             audioPlayer.currentTime = 0;
-            statusDiv.innerText = "Audio Stopped.";
+            statusDiv.innerText = "System halted.";
+            logBox.innerText = "All loops cleanly detached.";
         }
     </script>
 </body>
 </html>
 """
 
-@app.route('/')
-def index():
-    return render_template_string(HTML_INTERFACE)
-
-@app.route('/process_mobile', methods=['POST'])
-def process_mobile():
-    try:
-        data = request.json['image']
-        # Strip metadata header from base64 string
-        header, encoded = data.split(",", 1)
-        img_data = base64.b64decode(encoded)
-        
-        # Reconstruct base64 back into an OpenCV image frame array natively
-        nparr = np.frombuffer(img_data, np.uint8)
-        frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-
-        # 1. Run Laptop OCR
-        text = ocr.read(frame)
-        if not text.strip():
-            return jsonify({"text": "No text detected in camera frame.", "audio_available": False})
-
-        # 2. Run Laptop LLM Post-Correction
-        cleaned_text = process(text)
-        print(f"\n[AI Pipeline Output]: {cleaned_text}")
-
-        # 3. Generate Audio File on Laptop
-        # NOTE: Modify your Piper wrapper if necessary so it writes to disk instead of using hardware audio lines.
-        # Example target behavior: tts.synthesize_to_file(cleaned_text, AUDIO_OUTPUT_PATH)
-        if hasattr(tts, 'save_to_file'):
-            tts.save_to_file(cleaned_text, AUDIO_OUTPUT_PATH)
-        else:
-            # Fallback if your class only has .speak(): change piper internally to write output.wav
-            tts.speak(cleaned_text) 
-
-        return jsonify({"text": cleaned_text, "audio_available": True})
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/get_audio')
-def get_audio():
-    # Serves the generated wav file directly down to the mobile phone speaker system
-    return send_file(AUDIO_OUTPUT_PATH, mimetype="audio/wav")
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=False)
+if __name__=='__main__':
+    app.run(host='0.0.0.0',port=5000,debug=True)
