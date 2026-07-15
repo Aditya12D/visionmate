@@ -15,7 +15,7 @@ flowchart LR
     subgraph Laptop["💻 Laptop Server (Flask, port 5001)"]
         API{Mode router}
         API -->|/api/reading-mode| OCR[PaddleOCR<br/>PP-OCRv3/v4]
-        OCR --> LLM[Qwen 2.5 1.5B<br/>via Ollama, Metal GPU]
+        OCR --> LLM[Qwen 2.5 1.5B<br/>via Ollama, GPU/CPU]
         API -->|/api/walking-mode| YOLO[YOLOv11-nano<br/>object detection]
         YOLO --> SPATIAL[Spatial mapper<br/>zones + proximity]
         LLM --> TTS[Piper TTS<br/>in-memory WAV]
@@ -32,7 +32,7 @@ flowchart LR
 | Frame capture | Browser `getUserMedia` + `<canvas>` | Phone | Grabs a JPEG frame (quality 0.6) and Base64-encodes it |
 | Transport | Flask 3 + HTTPS (self-signed) + CORS | LAN | Carries frames laptop-ward and audio phone-ward as JSON |
 | Text extraction | PaddleOCR (PP-OCRv3 det + PP-OCRv4 rec + angle classifier) | Laptop CPU | Detects and recognizes printed text; lines below 0.75 confidence are discarded |
-| Text correction | Qwen 2.5 1.5B on Ollama | Laptop GPU (Metal) | Fixes OCR character errors and stitches broken/hyphenated lines into flowing paragraphs |
+| Text correction | Qwen 2.5 1.5B on Ollama | Laptop GPU (any vendor, CPU fallback) | Fixes OCR character errors and stitches broken/hyphenated lines into flowing paragraphs |
 | Obstacle detection | YOLOv11-nano (`ultralytics`) | Laptop CPU | Detects objects (80 COCO classes) with confidence ≥ 0.35 |
 | Spatial reasoning | Pure Python (`modes/walking.py`) | Laptop CPU | Maps detections to left/ahead/right zones, estimates proximity, composes the alert sentence |
 | Speech synthesis | Piper (en_US-lessac-medium, ONNX) | Laptop CPU | Generates a WAV entirely in memory (`BytesIO`) — nothing written to disk |
@@ -72,12 +72,12 @@ flowchart LR
 
 1. **Phone browser as sensor, not a native app.** Zero installation, works on any phone (iOS/Android), and keeps all compute on the laptop where the models live. The trade-off — browser security policies (HTTPS-only camera, tap-gated audio) — is handled with a self-signed certificate and an audio-unlock on the Start tap.
 2. **Local-first everything.** What a person reads and where they walk is among the most intimate data imaginable. Processing locally makes privacy a *property of the architecture*, not a policy promise.
-3. **A small LLM as an OCR "repair shop", not an oracle.** Qwen 2.5 1.5B is deliberately small (runs in ~1.2 GB, fully GPU-resident on Apple Silicon) and deliberately constrained by prompt: it corrects and stitches text but must not answer questions or summarize — which also acts as a prompt-injection shield against malicious text in scanned documents.
+3. **A small LLM as an OCR "repair shop", not an oracle.** Qwen 2.5 1.5B is deliberately small (runs in ~1.2 GB, fully GPU-resident on ordinary consumer hardware) and deliberately constrained by prompt: it corrects and stitches text but must not answer questions or summarize — which also acts as a prompt-injection shield against malicious text in scanned documents.
 4. **In-memory audio (Base64 WAV).** Earlier versions wrote WAV files to disk and served them via a second request. v5 synthesizes into `BytesIO` and inlines the audio in the JSON response: one round-trip, no disk artifacts, no cleanup, no stale-file privacy leak.
 5. **Safe-by-default hazard logic.** In walking mode, an object class *not* on the explicit "harmless" list is automatically a hazard. A misclassification therefore fails toward caution, never toward silence.
 6. **Reactive cadence instead of a fixed frame rate.** The next frame is captured only after the previous audio finishes plus a 1.5 s pause. The user is never talked over, and the pipeline never queues up stale frames.
 7. **Nano/mobile model variants throughout** (YOLO-nano, PaddleOCR mobile, Piper medium, 1.5B LLM) so the entire stack fits comfortably in 16 GB of shared memory alongside the OS.
-8. **Port 5001, not 5000** — macOS AirPlay Receiver occupies port 5000 on modern Macs.
+8. **Port 5001, not 5000** — avoids the AirPlay Receiver service that squats on port 5000 on some systems (macOS); on Windows/Linux any free port works out of the box.
 
 ## 7. Deployment Topology
 
@@ -91,4 +91,4 @@ flowchart LR
                                                          └──────────────────────────────┘
 ```
 
-Both sides are interchangeable commodity hardware: the client is any device with a browser, camera, and speaker; the server is any computer that runs Python (reference test rig: MacBook M5 — see the Technical Report).
+Both sides are interchangeable commodity hardware: the client is any device with a browser, camera, and speaker; the server is any computer that runs Python — a laptop, a desktop, or an edge board like a Raspberry Pi or NVIDIA Jetson (see the Technical Report for the reference test rig and portability details).

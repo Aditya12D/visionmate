@@ -166,7 +166,7 @@ openssl req -x509 -newkey rsa:2048 -keyout certs/key.pem -out certs/cert.pem \
 
 > 💡 **Why port 5001?** On modern macOS, the AirPlay Receiver service occupies port 5000, so VisionMate serves on 5001. If you change it, update the port in `server.py`.
 >
-> 💡 **No sound on iPhone?** Check the ring/silent switch and volume. The app already unlocks audio playback on the **Start** tap to satisfy iOS autoplay rules.
+> 💡 **No sound on the phone?** Check the media volume (and on iPhone, the ring/silent switch). The app already unlocks audio playback on the **Start** tap to satisfy mobile-browser autoplay rules.
 
 ## Privacy and Safety
 

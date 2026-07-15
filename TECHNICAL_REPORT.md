@@ -13,7 +13,7 @@
 | Text detection | PP-OCRv3 (en, mobile) | PaddlePaddle (CPU) | FP32 inference graph | 3.8 MB |
 | Text recognition | PP-OCRv4 (en, mobile) | PaddlePaddle (CPU) | FP32 inference graph | 9.8 MB |
 | Text-angle classification | PP-OCR mobile cls | PaddlePaddle (CPU) | FP32 inference graph | 2.1 MB |
-| OCR text correction | Qwen 2.5 — 1.5B Instruct | Ollama / llama.cpp (Metal GPU) | **GGUF Q4_K_M (4-bit quantized)** | 986 MB |
+| OCR text correction | Qwen 2.5 — 1.5B Instruct | Ollama / llama.cpp (GPU-accelerated) | **GGUF Q4_K_M (4-bit quantized)** | 986 MB |
 | Obstacle detection | YOLOv11-nano (2.6 M params) | Ultralytics / PyTorch (CPU) | FP32 | 5.6 MB |
 | Speech synthesis | Piper en_US-lessac-medium | ONNX Runtime (CPU) | ONNX FP32 | 63 MB |
 | **Total model footprint** | | | | **≈ 1.07 GB** |
@@ -43,13 +43,15 @@ Over Wi-Fi from the phone, add ≈ 0.1–0.3 s transfer overhead per round-trip.
 
 | Component | Compute unit |
 |---|---|
-| Qwen 2.5 1.5B (Ollama) | **100 % GPU** (Apple Metal), confirmed via `ollama ps` |
+| Qwen 2.5 1.5B (Ollama) | **100 % GPU** — Ollama auto-selects the available accelerator (CUDA / ROCm / Metal); confirmed via `ollama ps` |
 | PaddleOCR | CPU (`use_gpu=False`) |
 | YOLOv11n | CPU |
 | Piper TTS | CPU |
-| NPU / ANE | Not used |
+| NPU | Not used |
 
 Compute placement is deliberate: the heaviest model (the LLM) is offloaded to the GPU, while the lighter vision and speech models run on CPU — so the two never contend for the same processor and the pipeline stays responsive. On a machine without a usable GPU, Ollama transparently falls back to CPU inference; every component of the stack is CPU-capable.
+
+**No high-end hardware is required.** The LLM needs only ~1.2 GB of GPU memory, so an ordinary entry-level or integrated GPU is sufficient — and a plain CPU works too, just with higher latency. Total system footprint (~4 GB RAM, ~1 GB of weights) is deliberately sized for everyday consumer machines and edge devices, not workstation GPUs.
 
 ### 1.5 Peak memory usage (measured, RSS)
 
@@ -68,7 +70,7 @@ Comfortably within the 16 GB test machine; 8 GB machines should also work with r
 | | |
 |---|---|
 | Server | MacBook, **Apple M5**, 16 GB unified memory, macOS 26.6 |
-| Client | iPhone, Safari, over 2.4/5 GHz Wi-Fi LAN |
+| Client | Smartphone browser (iPhone/Safari in testing; any Android or iOS phone works), over 2.4/5 GHz Wi-Fi LAN |
 | Python | 3.10 (conda env), Flask 3, PaddleOCR 2.9.1, ultralytics (YOLO11), Piper TTS |
 
 These are simply the devices the measurements were taken on — **nothing in VisionMate is platform-specific.** The server runs identically on Windows and Linux (all dependencies are cross-platform; Ollama ships for all three OSes), and the client is any modern browser: Android Chrome, iOS Safari, or a desktop browser all work, since the "app" is a plain web page served over the LAN.
@@ -77,9 +79,10 @@ These are simply the devices the measurements were taken on — **nothing in Vis
 
 The compute node is **hardware-agnostic**: the only physical requirements on the user's side are **a camera and a speaker**. In the current prototype a smartphone browser provides both — connected purely over the local Wi-Fi network, with **no internet involved** — which proves the server needs no attached peripherals at all. The same design ports directly to embedded targets:
 
-- **Raspberry Pi / single-board computers:** the entire stack is plain Python with CPU-capable models. Piper TTS was *originally built for the Raspberry Pi 4*, PaddleOCR ships mobile-class checkpoints, YOLOv11-nano (2.6 M params) runs on ARM CPUs, and Ollama officially supports ARM64 Linux — the 4-bit-quantized 1.5B LLM fits in a Pi 5's 8 GB RAM. Latency would be higher than the figures in §1.3 (measured on Apple M5), and the LLM could be swapped for an even smaller variant (e.g. a 0.5B model) on constrained boards.
+- **Raspberry Pi / single-board computers:** the entire stack is plain Python with CPU-capable models. Piper TTS was *originally built for the Raspberry Pi 4*, PaddleOCR ships mobile-class checkpoints, YOLOv11-nano (2.6 M params) runs on ARM CPUs, and Ollama officially supports ARM64 Linux — the 4-bit-quantized 1.5B LLM fits in a Pi 5's 8 GB RAM. Latency would be higher than the figures in §1.3 (measured on the laptop test rig), and the LLM could be swapped for an even smaller variant (e.g. a 0.5B model) on constrained boards.
 - **Dedicated wearable form factor:** with a USB/CSI camera module and a small speaker or bone-conduction headset attached directly to the board, the phone disappears entirely and VisionMate becomes a self-contained assistive device — same code, same models, zero cloud.
-- **Any laptop/desktop:** no Apple-specific dependencies; CUDA GPUs (via Ollama) or pure CPU both work.
+- **Edge AI boards (NVIDIA Jetson and similar):** Jetson-class devices run the same stack with GPU acceleration via Ollama's ARM64+CUDA builds; boards with NPUs can additionally take over the vision models (YOLO and PaddleOCR both export to ONNX/TensorRT for NPU/accelerator runtimes) — a natural next optimization step.
+- **Any laptop/desktop:** Windows, Linux, or macOS; a simple integrated or entry-level GPU is plenty (the LLM needs only ~1.2 GB of GPU memory), and pure CPU works as well — Ollama auto-detects whatever is available.
 
 This flexibility is a direct consequence of the local-first architecture: because nothing depends on an internet service, the whole system relocates to any device that can run Python and hold ~1 GB of model weights.
 
