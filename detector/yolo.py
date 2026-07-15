@@ -4,7 +4,7 @@ from ultralytics import YOLO
 
 
 class YOLODetector:
-    def __init__(self, model_path: str = "yolo11n.pt", conf: float = 0.35):
+    def __init__(self, model_path: str = "models\yolo11n.pt", conf: float = 0.35):
         """
         Initialize the YOLO detector.
 

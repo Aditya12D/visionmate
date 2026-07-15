@@ -86,10 +86,22 @@ def handle_walking_mode():
 
 @app.route("/get_audio")
 def get_audio():
-    return send_file(
-        AUDIO_OUTPUT_PATH,
-        mimetype="audio/wav"
-    )
+    try:
+        if os.path.exists(AUDIO_OUTPUT_PATH):
+            with open(AUDIO_OUTPUT_PATH, 'rb') as f:
+                data = f.read()
+            try:
+                os.remove(AUDIO_OUTPUT_PATH)
+            except Exception as e:
+                print(f"Error removing temporary audio file: {e}")
+            from io import BytesIO
+            return send_file(
+                BytesIO(data),
+                mimetype="audio/wav"
+            )
+        return jsonify({"error": "Audio file not found"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 HTML_INTERFACE = """
