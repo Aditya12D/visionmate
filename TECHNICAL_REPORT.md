@@ -67,13 +67,16 @@ Comfortably within the 16 GB test machine; 8 GB machines should also work with r
 
 ### 1.6 Tested device specifications
 
+The system was tested on **two different server machines across two operating systems**:
+
 | | |
 |---|---|
-| Server | MacBook, **Apple M5**, 16 GB unified memory, macOS 26.6 |
+| Server — test rig 1 *(source of the measured figures above)* | MacBook, **Apple M5**, 16 GB unified memory, macOS 26.6 — Python 3.10 (conda env) |
+| Server — test rig 2 | Windows laptop, **13th Gen Intel Core i7-13620H**, 16 GB RAM — Python 3.10 (`venv310` virtual environment) |
 | Client | Smartphone browser (iPhone/Safari in testing; any Android or iOS phone works), over 2.4/5 GHz Wi-Fi LAN |
-| Python | 3.10 (conda env), Flask 3, PaddleOCR 2.9.1, ultralytics (YOLO11), Piper TTS |
+| Software stack | Flask 3, PaddleOCR 2.9.1, ultralytics (YOLO11), Piper TTS, Ollama |
 
-These are simply the devices the measurements were taken on — **nothing in VisionMate is platform-specific.** The server runs identically on Windows and Linux (all dependencies are cross-platform; Ollama ships for all three OSes), and the client is any modern browser: Android Chrome, iOS Safari, or a desktop browser all work, since the "app" is a plain web page served over the LAN.
+Running verified on both an ARM machine (Apple Silicon/macOS) and an x86 machine (Intel/Windows) — **nothing in VisionMate is platform-specific.** Linux is equally supported (all dependencies are cross-platform; Ollama ships for all three OSes), and the client is any modern browser: Android Chrome, iOS Safari, or a desktop browser all work, since the "app" is a plain web page served over the LAN.
 
 ### 1.7 Hardware portability — beyond the laptop
 
