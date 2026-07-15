@@ -17,10 +17,6 @@ ocr=OCR()
 walking_engine=WalkingMode()
 tts=PiperTTS()
 
-AUDIO_OUTPUT_PATH="static/output.wav"
-os.makedirs("static",exist_ok=True)
-
-
 @app.route('/')
 def index():
     return render_template_string(HTML_INTERFACE)
@@ -39,15 +35,16 @@ def handle_reading_mode():
         if not raw_text.strip():
             return jsonify({
                 "text":"No text detected.",
-                "audio_available":False
+                "audio_base64":None
             })
         
         cleaned_text=process(raw_text)
 
-        tts.save_to_file(cleaned_text,AUDIO_OUTPUT_PATH)
+        audio_bytes = tts.get_audio_bytes(cleaned_text)
+        audio_base64 = base64.b64encode(audio_bytes).decode('utf-8')
         return jsonify({
             "text":cleaned_text,
-            "audio_available":True
+            "audio_base64":audio_base64
         })
 
     except Exception as e:
@@ -72,36 +69,17 @@ def handle_walking_mode():
         if alert_phrase=="NEEDS_SCENERY_DESCRIPTION":
             alert_phrase="Caution. Open space ahead"
         
-        tts.save_to_file(alert_phrase,AUDIO_OUTPUT_PATH)
+        audio_bytes = tts.get_audio_bytes(alert_phrase)
+        audio_base64 = base64.b64encode(audio_bytes).decode('utf-8')
         return jsonify({
             "text":alert_phrase,
-            "audio_available":True
+            "audio_base64":audio_base64
         })
 
     except Exception as e:
         return jsonify({
             "error":str(e)
         }),500
-    
-
-@app.route("/get_audio")
-def get_audio():
-    try:
-        if os.path.exists(AUDIO_OUTPUT_PATH):
-            with open(AUDIO_OUTPUT_PATH, 'rb') as f:
-                data = f.read()
-            try:
-                os.remove(AUDIO_OUTPUT_PATH)
-            except Exception as e:
-                print(f"Error removing temporary audio file: {e}")
-            from io import BytesIO
-            return send_file(
-                BytesIO(data),
-                mimetype="audio/wav"
-            )
-        return jsonify({"error": "Audio file not found"}), 404
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
 
 
 HTML_INTERFACE = """
@@ -222,15 +200,17 @@ HTML_INTERFACE = """
                 }
                 
                 logBox.innerText = data.text;
-                statusDiv.innerText = "Speaking alert...";
                 
-                // Point to the newly rendered Piper file
-                audioPlayer.src = "/get_audio?v=" + new Date().getTime();
-                audioPlayer.play().catch(e => {
-                    console.log("Audio play blocked by browser window security policies.");
-                    // Safe fallback: If audio player fails, force the loop forward anyway
+                if (data.audio_base64) {
+                    statusDiv.innerText = "Speaking alert...";
+                    audioPlayer.src = "data:audio/wav;base64," + data.audio_base64;
+                    audioPlayer.play().catch(e => {
+                        console.log("Audio play blocked by browser window security policies.");
+                        scheduleNextFrame(1500);
+                    });
+                } else {
                     scheduleNextFrame(1500);
-                });
+                }
             })
             .catch(err => {
                 if (!isLiveActive) return;

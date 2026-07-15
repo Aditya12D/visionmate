@@ -3,6 +3,7 @@ import wave
 import sounddevice as sd
 from piper.config import SynthesisConfig
 import soundfile as sf
+import io
 
 from piper.voice import PiperVoice
 from config import PIPER_MODEL, PIPER_CONFIG
@@ -40,3 +41,13 @@ class PiperTTS:
         # Uses the identical, verified working method from your speak function
         with wave.open(output_path, "wb") as wav_file:
             self.voice.synthesize_wav(text, wav_file, syn_config=config)
+
+    def get_audio_bytes(self, text: str) -> bytes:
+        """
+        Synthesizes text to speech and returns the WAV bytes directly in memory.
+        """
+        config = SynthesisConfig(length_scale=1.2)
+        audio_buffer = io.BytesIO()
+        with wave.open(audio_buffer, "wb") as wav_file:
+            self.voice.synthesize_wav(text, wav_file, syn_config=config)
+        return audio_buffer.getvalue()
