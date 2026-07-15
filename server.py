@@ -156,6 +156,10 @@ HTML_INTERFACE = """
                 isLiveActive = true;
                 actionBtn.innerText = "⏸️ PAUSE LIVE STREAM";
                 actionBtn.classList.add('streaming');
+                // iOS Safari audio unlock: playing a silent clip inside this tap's
+                // user-gesture window authorizes all future programmatic play() calls
+                audioPlayer.src = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA=";
+                audioPlayer.play().catch(() => {});
                 // Kick off the very first reactive execution chain link
                 executeReactiveCycle();
             }
@@ -246,4 +250,4 @@ HTML_INTERFACE = """
 """
 
 if __name__=='__main__':
-    app.run(host='0.0.0.0',port=5000,debug=True)
+    app.run(host='0.0.0.0',port=5001,debug=True,ssl_context=('certs/cert.pem','certs/key.pem'))

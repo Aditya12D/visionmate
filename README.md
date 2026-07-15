@@ -45,8 +45,6 @@ All processing is handled over your Local Area Network (LAN) for complete privac
 ```
 visionmate/
 │
-├── camera/
-│   └── camera.py         # Maintained for upcoming native hardware/Raspberry Pi integration
 ├── llm/
 │   ├── prompts.py        # Strict structured prompt constraints for LLM text formatting
 │   └── qwen.py           # Local Ollama client orchestration layer
@@ -59,13 +57,15 @@ visionmate/
 │   └── yolo.py           # YOLO detector implementation for walking mode
 ├── tts/
 │   └── piper.py          # Piper TTS engine wrapper supporting in-memory BytesIO generation
-├── static/               # Contains static output assets (no persistent WAV logs)
-├── models/               # Model weights storage directory (YOLO & Piper folders)
+├── models/               # Model weights (YOLO .pt & Piper voice) — downloaded at setup, not committed
+├── certs/                # Self-signed TLS certificate for HTTPS — generated at setup, not committed
 │
+├── ARCHITECTURE.md       # System diagram, pipeline, data flow, and design decisions
+├── TECHNICAL_REPORT.md   # Measured specs, local-AI verification, and evaluation
 ├── .gitignore            # Ignores byte caches, IDE configs, virtual environments and WAV files
 ├── requirements.txt      # Cleaned and grouped dependency tree requirements
 ├── config.py             # Shared global pipeline configurations (model paths, thresholds)
-└── server.py             # Flask application server and real-time processing endpoints
+└── server.py             # Flask app: endpoints, embedded web UI, and HTTPS serving
 ```
 
 ---
@@ -135,32 +135,80 @@ huggingface-cli download rhasspy/piper-voices --include "en/en_US/lessac/medium/
 
 ---
 
+### C. HTTPS certificate (required for the phone camera)
+
+Mobile browsers only allow camera access (`getUserMedia`) on **secure origins**, so the server runs over HTTPS with a self-signed certificate. Generate one into the `certs/` folder (replace `192.168.1.15` with your laptop's local IP):
+
+```bash
+mkdir -p certs
+openssl req -x509 -newkey rsa:2048 -keyout certs/key.pem -out certs/cert.pem \
+  -days 365 -nodes -subj "/CN=192.168.1.15" \
+  -addext "subjectAltName=IP:192.168.1.15,IP:127.0.0.1,DNS:localhost"
+```
+
+`server.py` picks up `certs/cert.pem` and `certs/key.pem` automatically.
+
+---
+
 ## Running the Complete Project
 
 1. With your virtual environment activated, run the web application server:
    ```bash
    python server.py
    ```
-2. Locate your server laptop's Local IP Address (displayed on server boot, or find via `ipconfig` on Windows or `hostname -I` on Linux).
+2. Locate your server laptop's Local IP Address (displayed on server boot, or find via `ipconfig` on Windows, `hostname -I` on Linux, or `ipconfig getifaddr en0` on macOS).
 3. Connect your mobile phone browser to the **same Wi-Fi network** and navigate to:
    ```text
-   http://<YOUR_LAPTOP_IP>:5000
+   https://<YOUR_LAPTOP_IP>:5001
    ```
-   *(For example: `http://192.168.1.15:5000`)*
+   *(For example: `https://192.168.1.15:5001` — note **https** and port **5001**)*
+4. Your browser will warn that the connection is not private — that's expected with a self-signed certificate. Tap **Advanced / Show Details → Proceed / Visit Website** (needed once per device), then **Allow** camera access when prompted.
 
-> 💡 **Camera Access on Insecure HTTP (Mobile Browsers):**
-> Because local connections run over unencrypted `http://`, mobile browsers restrict camera access.
-> - **Android Chrome:** Navigate to `chrome://flags`, search for `#unsafely-treat-insecure-origin-as-secure`, set it to **Enabled**, add your server URL (e.g., `http://192.168.1.15:5000`), and tap **Relaunch**.
-> - **iOS Safari:** iOS devices normally require HTTPS. You may configure a self-signed local SSL certificate or forward the port using a tunnel service like Ngrok for secure development testing.
+> 💡 **Why port 5001?** On modern macOS, the AirPlay Receiver service occupies port 5000, so VisionMate serves on 5001. If you change it, update the port in `server.py`.
+>
+> 💡 **No sound on iPhone?** Check the ring/silent switch and volume. The app already unlocks audio playback on the **Start** tap to satisfy iOS autoplay rules.
+
+## Privacy and Safety
+
+### Data handling
+- **Camera frames are processed entirely in RAM** — decoded, analyzed, and discarded. No image, extracted text, or generated audio is ever written to disk or any log.
+- **Nothing leaves your local network.** Frames travel phone → laptop over your own Wi-Fi (HTTPS); all AI inference happens on the laptop; the LLM runs against `127.0.0.1` only. There is no cloud API, no telemetry, and no analytics in the application. Internet is required only once, to download the models at install time.
+- **No accounts, no identifiers** — the app stores no user data at all.
+
+### Permissions
+- **Phone:** camera access only (requested by the browser). No microphone, no location, no storage.
+- **Laptop:** the server binds to the local network so your phone can reach it — use it on a trusted home/private Wi-Fi network.
+
+### Storage
+- The only files on disk are the AI model weights themselves. Zero user-generated content is persisted (the `.gitignore` also excludes WAV artifacts from older versions).
+
+### Limitations and risks — please read
+- VisionMate is a **prototype assistive aid, not a certified medical or mobility device.** It must **complement — never replace — a white cane, guide dog, or human assistance.**
+- Obstacle detection covers the 80 COCO object classes: **stairs, curbs, potholes, and glass doors are NOT detected.**
+- Distance is estimated from object size in frame, not true depth sensing, and the scene is sampled once per spoken cycle (every few seconds) — fast-moving hazards can be missed.
+- OCR and speech are English-only in this build; accuracy degrades in low light and with handwriting.
+- The text-correction LLM is constrained by prompt to never answer or execute instructions found in scanned documents (prompt-injection mitigation), but as with any LLM this cannot be absolutely guaranteed.
+
+---
+
+## Attribution
+
+VisionMate builds on outstanding open-source work:
+
+| Component | Project / Authors | License |
+|---|---|---|
+| OCR | [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR) (PP-OCRv3/v4 English mobile models) — PaddlePaddle team | Apache-2.0 |
+| LLM | [Qwen 2.5 1.5B Instruct](https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct) — Alibaba Qwen team | Apache-2.0 |
+| LLM runtime | [Ollama](https://ollama.com) (llama.cpp backend, Q4_K_M quantization) | MIT |
+| Object detection | [YOLOv11n](https://github.com/ultralytics/ultralytics) — Ultralytics (pretrained on the [COCO dataset](https://cocodataset.org)) | AGPL-3.0 |
+| Text-to-speech | [Piper](https://github.com/rhasspy/piper) with the `en_US-lessac-medium` voice — Rhasspy project | MIT |
+| Web framework | [Flask](https://flask.palletsprojects.com) + Flask-CORS | BSD-3-Clause / MIT |
+| Vision utilities | [OpenCV](https://opencv.org), [NumPy](https://numpy.org) | Apache-2.0 / BSD |
+
+All models are used as published pretrained weights; no additional training data was collected. Note that Ultralytics YOLO is AGPL-3.0-licensed — retain source availability of this project when distributing.
+
+---
 
 ## License
 
 Distributed under the MIT License. See `LICENSE` for more information.
-
----
-
-## Acknowledgements
-
-- **PaddleOCR** — High performance local text identification engines.
-- **Ollama & Qwen Team** — Fast, highly efficient open model parameters for offline systems.
-- **Rhasspy Piper Project** — Incredibly fast, natural localized text-to-speech engine architectures.
